@@ -53,13 +53,17 @@ func Setup(ytApiKey string, discord *discordgo.Session, db *sql.DB, ytConfig *Co
 
 // Poll the playlists every 30 minutes
 func StartPollingPlaylists() {
+	log.Default().Println("Running initial poll of all channels")
 	PollAllChannels()
 
 	ticker := time.NewTicker(30 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		PollAllChannels()
+	for tickTime := range ticker.C {
+		if tickTime.Hour() > 8 && tickTime.Hour() < 22 {
+			log.Default().Printf("Polling channels at %v\n", tickTime)
+			PollAllChannels()
+		}
 	}
 }
 
