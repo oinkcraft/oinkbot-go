@@ -2,8 +2,10 @@ package youtube
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"google.golang.org/api/option"
@@ -16,6 +18,7 @@ var (
 	YTClient *youtube.Service
 	YTConfig *Config
 	Discord *discordgo.Session
+	SQLite *sql.DB
 )
 
 // TODO: Break these down more haha, but whatever for now
@@ -31,7 +34,7 @@ type Config struct {
 
 // NOTE: not using init() here because ordering
 // Start polling youtube and channels for a respective video
-func Setup(ytApiKey string, discord *discordgo.Session, ytConfig *Config) {
+func Setup(ytApiKey string, discord *discordgo.Session, db *sql.DB, ytConfig *Config) {
 	ytClient, err := youtube.NewService(context.TODO(), option.WithAPIKey(ytApiKey))
 	if err != nil {
 		log.Fatal("Failed to load youtube with the given api key!")
@@ -39,55 +42,138 @@ func Setup(ytApiKey string, discord *discordgo.Session, ytConfig *Config) {
 	YTClient = ytClient
 	YTConfig = ytConfig
 	Discord = discord
+	SQLite = db
+
+	InitDB()
 	StartPollingPlaylists()
 }
 
 // Poll the playlists every 30 minutes
 func StartPollingPlaylists() {
+	PollAllChannels()
+
+	ticker := time.NewTicker(30 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		PollAllChannels()
+	}
+}
+
+// Split out for the recursive call
+func PollAllChannels() {
 	cowdinoChannelId := YTConfig.CowdinoChannelId
 	fracThinkingPlaylistId := YTConfig.FracturedThinkingPlaylist
 	fracThinkingRoleId := YTConfig.FracturedThinkingRoleId
 
-	// Our approach is going to be to get the latest video, then compare what playlist it's on
-	// I can also just check for `(FT [09])` regex, but that relies on me always remembering to do that lol
+	PollLatestVideoFor(cowdinoChannelId, fracThinkingPlaylistId, fracThinkingRoleId, "🫯 NEW FRACTURED THINKING")
+}
+
+func PollLatestVideoFor(channelId, playlistId, roleId, customMessage string) {
 	latestVidResp, err := YTClient.Search.
 		List([]string{"snippet"}).
-		ChannelId(cowdinoChannelId).
+		ChannelId(channelId).
 		Type("video").
 		Order("date").
 		MaxResults(1).
 		Do()
 	if err != nil {
 		log.Default().Println("Failed to get latest video. Err: ", err)
-	}
-	latestVideo := latestVidResp.Items[0]
-	latestVideoId := latestVideo.Id.VideoId
-
-	// PICKUP: call func to write to a file that this was the last one sent etc.
-	//		check video id first before calling playlist
-	alreadySent := false
-
-	if !alreadySent {
-		checkIsInPlaylistResp, err := YTClient.PlaylistItems.
-			List([]string{"id"}).
-			PlaylistId(fracThinkingPlaylistId).
-			VideoId(latestVideoId).
-			MaxResults(1).
-			Do()
-		if err != nil {
-			log.Default().Println("Failed to get a result from playlist. Err: ", err)
-		}
-		if len(checkIsInPlaylistResp.Items) > 0 {
-			vidUrlStr := "https://www.youtube.com/watch?v=" + latestVideoId
-			msgStr := fmt.Sprintf("<@&%s> **NEW FRACTURED THINKING**\n\n%s", fracThinkingRoleId, vidUrlStr)
-			
-			Discord.ChannelMessageSend(YTConfig.DiscordNotifChannelId, msgStr)
-		}
+		return
 	}
 
+	if len(latestVidResp.Items) == 0 {
+		return
+	}
 
-	// TODO: The other two
-	// NOTE: There's another way to go about latest video published by someone
+	latestVideoId := latestVidResp.Items[0].Id.VideoId
+	latestVideoTitle := latestVidResp.Items[0].Snippet.Title
 
-	// TODO: Re-run this function after 30 minutes elapses
+	if IsVideoInDb(latestVideoId) {
+		log.Default().Printf("Video id %s already in db. Skipping\n", latestVideoId)
+		return
+	}
+
+	checkIsInPlaylistResp, err := YTClient.PlaylistItems.
+		List([]string{"id"}).
+		PlaylistId(playlistId).
+		VideoId(latestVideoId).
+		MaxResults(1).
+		Do()
+	if err != nil {
+		log.Default().Println("Failed to get a result from playlist. Err: ", err)
+		return
+	}
+
+	if len(checkIsInPlaylistResp.Items) == 0 {
+		return
+	}
+
+	vidUrlStr := "https://www.youtube.com/watch?v=" + latestVideoId
+	msgStr := fmt.Sprintf(
+		"## %s\n\n<@&%s>\n%s",
+		customMessage,
+		roleId,
+		vidUrlStr,
+	)
+
+	if _, err := Discord.ChannelMessageSend(
+		YTConfig.DiscordNotifChannelId,
+		msgStr,
+	); err != nil {
+		log.Default().Println("Failed to send video to Discord. Err: ", err)
+		return
+	}
+
+	log.Default().Printf("%s - Video sent to channel on Discord\n", latestVideoId)
+
+	WriteVideoToDb(
+		latestVideoId,
+		latestVideoTitle,
+		playlistId,
+	)
+}
+
+// We don't really need all the historical data, but eh why not. This table isn't going to get big any time soon
+func IsVideoInDb(videoId string) (found bool) {
+	err := SQLite.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM videos WHERE video_id = ?)
+	`, videoId).Scan(&found)
+
+	if err != nil {
+		log.Default().Println("Failed to run a check if a video exists! Returning true to prevent spam. Error: ", err)
+		found = true
+	}
+
+	return
+}
+
+func WriteVideoToDb(videoId, title, playlistId string) {
+	_, err := SQLite.Exec(
+		`INSERT INTO videos (video_id, title, playlist_id, discovered_at)
+		 VALUES(?, ?, ?, ?)`,
+		videoId, title, playlistId, time.Now())
+	if err != nil {
+		log.Default().Printf("Failed to write video %s to db!\n", videoId)
+	} else {
+		log.Default().Printf("%s - Video ID written to db\n", videoId)
+	}
+}
+
+// Set up DB table, keep block text out of setup func
+func InitDB() {
+	_, err := SQLite.Exec(`
+		CREATE TABLE IF NOT EXISTS videos (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			video_id TEXT NOT NULL UNIQUE,
+			title TEXT NOT NULL,
+			playlist_id TEXT NOT NULL,
+			discovered_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+	`)
+
+	if err != nil {
+		log.Fatal("Failed to initialize sqlite table in youtube package")
+	}
 }
