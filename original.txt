@@ -1,0 +1,74 @@
+This is the original config. We'll use the same playlist IDs obviously, will delete when I move this
+
+{
+    "bot": {
+        "token": "TOKEN",
+        "prefix": "oinkbot ",
+        "guild": "0000",
+        "channels": {
+            "rules": "0000",
+            "issues": "0000",
+            "botchat": "0000",
+            "logchannel": "0000",
+            "auditlogchannel": "0000",
+            "announcementchannel": "0000",
+            "contentnotifchannel": "0000"
+        },
+        "roles": {
+            "staff": "0000",
+            "admin": "0000",
+            "owner": "0000",
+            "donator": "0000",
+            "event": "0000",
+            "towny": "0000",
+            "factions": "0000",
+            "creative": "0000",
+            "parkour": "0000",
+            "minigames": "0000"
+        },
+        "messages": {
+            "worldroles": "0000"
+        },
+        "integrations": {
+            "enable": {
+                "mysql": true,
+                "trello": true
+            },
+            "mysql": {
+                "host": "localhost",
+                "user": "username",
+                "password": "shhh",
+                "database": "ob_database"
+            },
+            "trello": {
+                "key": "0000",
+                "secret": "shhh",
+                "lists": {
+                    "issues": "0000"
+                },
+                "labels":{
+                    "suggestion": "0000",
+                    "issue": "0000"
+                }
+            },
+            "youtube": {
+                "key": "0000",
+                "playlistIDs": {
+                    "lifestyle": "UUh7mi5sI3BSzKReLzXpgimA",
+                    "devlog": "PLOny7uVQmd7FXlaZzUu29LL474yoM6i5k",
+                    "cowdino": "PL3L3JHrBafNwB_jKc0EPe31Pdjx0dRFCv",
+                    "vgt": "PL3L3JHrBafNwB_jKc0EPe31Pdjx0dRFCv"
+                },
+                "notifRoles": {
+                    "lifestyle": "0000",
+                    "devlog": "0000",
+                    "cowdino": "0000",
+                    "vgt": "0000"
+                }
+            }
+        }
+    },
+    "web": {
+        "secret": {"0000": level}
+    }
+}
