@@ -1,12 +1,18 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"os"
 
+	"com.redstoneoinkcraft.oinkbot/m/youtube"
 	"github.com/bwmarrin/discordgo"
 	"github.com/joho/godotenv"
 )
+
+type Config struct {
+	YouTube *youtube.Config `json:"youtube"`
+}
 
 func main() {
 	log.Default().Println("Starting up oinkbot-go!")
@@ -15,6 +21,7 @@ func main() {
 		log.Fatal("Failed to load .env file")
 	}
 
+	// Setup the bot stuff
 	discordBotToken := os.Getenv("DISCORD_BOT_TOKEN")
 	discord, err := discordgo.New("Bot " + discordBotToken)
 	if err != nil {
@@ -23,7 +30,19 @@ func main() {
 	defer discord.Close()
 	log.Default().Println("Successfully initialized oinkbot-go with token")
 
-	// discord.ChannelMessageSend("795776459997577256", "sup g")
+	// Load configuration
+	var config Config
+	configData, err := os.ReadFile("config.json")
+	if err != nil {
+		log.Fatal("Failed to load configuration json!")
+	}
+	if err := json.Unmarshal(configData, &config); err != nil {
+		log.Fatal("Failed to unmarshal config json")
+	}
+
+	// Kick off youtube poller
+	youtube.Setup(os.Getenv("YOUTUBE_API_KEY"), discord, config.YouTube)
+
 
 	/* This is a cool pattern
 	sc := make(chan os.Signal, 1)
