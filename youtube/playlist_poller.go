@@ -24,11 +24,14 @@ var (
 // TODO: Break these down more haha, but whatever for now
 type Config struct {
 	CowdinoChannelId string `json:"cowdino_channel_id"`
+	LifestyleChannelId string `json:"lifestyle_channel_id"`
 	FracturedThinkingPlaylist string `json:"fractured_thinking_playlist"`
 	DevlogPlaylist string `json:"devlog_playlist"`
 	LifestylePlaylist string `json:"lifestyle_playlist"`
 	CowdinoPlaylist string `json:"cowdino_playlist"`
 	FracturedThinkingRoleId string `json:"fractured_thinking_role_id"`
+	DevlogRoleId string `json:"devlog_role_id"`
+	LifestyleRoleId string `json:"lifestyle_role_id"`
 	DiscordNotifChannelId string `json:"discord_notif_channel_id"`
 }
 
@@ -65,8 +68,21 @@ func PollAllChannels() {
 	cowdinoChannelId := YTConfig.CowdinoChannelId
 	fracThinkingPlaylistId := YTConfig.FracturedThinkingPlaylist
 	fracThinkingRoleId := YTConfig.FracturedThinkingRoleId
-
 	PollLatestVideoFor(cowdinoChannelId, fracThinkingPlaylistId, fracThinkingRoleId, "🫯 NEW FRACTURED THINKING")
+
+	/*
+		There are multiple devlog channels... game and web (and seashell)
+		So this may not send game devlogs properly, but effectively it's per-playlist
+		Leaving this uncommented for now
+	*/
+	lifestyleChannelId := YTConfig.LifestyleChannelId
+	// devlogPlaylistId := YTConfig.DevlogPlaylist
+	// devlogRoleId := YTConfig.DevlogRoleId
+	// PollLatestVideoFor(lifestyleChannelId, devlogPlaylistId, devlogRoleId, "🔧 NEW DEVLOG")
+	
+	lifestylePlaylistId := YTConfig.LifestylePlaylist
+	lifestyleRoleId := YTConfig.LifestyleRoleId
+	PollLatestVideoFor(lifestyleChannelId, lifestylePlaylistId, lifestyleRoleId, "🎥 NEW LIFESTYLE VIDEO")
 }
 
 func PollLatestVideoFor(channelId, playlistId, roleId, customMessage string) {
